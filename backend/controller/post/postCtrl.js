@@ -289,23 +289,28 @@ const SearchPosts = catchAsync(async (req, res, next) => {
   // res.send(results);
 
   let results;
-  console.log(req.query.text);
+  // console.log(req.query.text);
 
   if (req.query.text) {
     // if (req.query.text.includes(",") || req.query.text.includes(" ")) {
     results = await Post.aggregate([
       {
-        $search: {
-          index: "autocomplete",
-          autocomplete: {
-            query: req.query.text,
-            path: "title",
-            fuzzy: {
-              maxEdits: 1,
-            },
-            tokenOrder: "sequential",
-          },
+        $match: {
+          $text: {
+            $search: req.query.text
+          }
+        }
+      },
+      {
+        $lookup: {
+          from: 'users', // the name of the User collection
+          localField: 'user',
+          foreignField: '_id',
+          as: 'userDetails',
         },
+      },
+      {
+        $unwind: '$userDetails',
       },
       {
         $project: {
@@ -315,6 +320,12 @@ const SearchPosts = catchAsync(async (req, res, next) => {
           subtitle: 1,
           summary: 1,
           minute_read: 1,
+          user: {
+            _id: '$userDetails._id',
+            username: '$userDetails.userName',
+          },
+          
+          url_title:1,
           content: 1,
           score: { $meta: "searchScore" },
         },
@@ -406,21 +417,19 @@ const userPostsCtrl = async (req, res, next) => {
 };
 
 // for viewing single post
-const postDetailsCtrl = async (req, res) => {
+const postDetailsCtrl = async (req, res, next) => {
   try {
     const post = await Post.findById(req.params.id);
-
-    const isViewed = post.numViews.includes(req.userAuth);
-
-    if (isViewed) {
-      res.json({
-        status: "success",
-        data: post,
-      });
-    } else {
-      post.numViews.push(req.userAuth);
-      await post.save();
+    if (!post) {
+      return next(appErr("Post not found"));
     }
+    // Increment the numViews
+    post.numViews += 1;
+    await post.save();
+    res.json({
+      status: "success",
+      data: post,
+    });
   } catch (error) {
     next(appErr(error.message));
   }

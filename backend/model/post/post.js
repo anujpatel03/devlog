@@ -71,6 +71,10 @@ const postSchema = new mongoose.Schema({
     type: String,
     unique: true,
   },
+  numViews: {
+    type: Number,
+    default: 0,
+  },
 },
 
   {
